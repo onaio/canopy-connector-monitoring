@@ -9,6 +9,8 @@ from loguru import logger
 from requests import Session
 from requests.auth import HTTPBasicAuth
 
+VALID_STATUS_CODE = 200
+
 
 def count_errors(item):
     """Count process group errors."""
@@ -112,37 +114,68 @@ MAPPING = {
 }
 
 
-def get_api_response(session: Session, process_group_id: Optional[str] = None):
-    """Get API response for process group."""
+class NiFiApiError(Exception):
+    """Custom exception to represent API errors."""
+
+    pass
+
+
+def get_api_response(
+    base_url: str, session: Session, process_group_id: Optional[str] = None
+):
+    """
+    Get NiFi API response for process group.
+
+    This function calls the process group API endpoint and retrieves info.
+    about a process group's children.
+    """
     if process_group_id is None:
         process_group_id = "root"
     response = session.get(
-        f"https://nifi-production.ona.io/nifi-api/flow/process-groups/{process_group_id}"
+        f"{base_url}/nifi-api/flow/process-groups/{process_group_id}"
     )
+    if response.status_code != VALID_STATUS_CODE:
+        raise NiFiApiError(
+            f"Response Status: {response.status_code}\nText: {response.text}"
+        )
     return response.json()
 
 
-def process_api_response(
-    response: dict, session: Session, current_depth: int = 0, max_depth: int = 2
+def process_nifi_connectors(
+    base_url: str,
+    session: Session,
+    process_group_id: Optional[str] = None,
+    current_depth: int = 0,
+    max_depth: int = 2,
 ):
-    """Process JSON received from API."""
+    """
+    Get and process NiFi connectors using the NiFi API.
+
+    This function calls 'get_api_response' to get NiFi processor group info.
+    and then logs that information.  This is done recursively until max_depth
+    is attained, or all process groups are processed.
+    """
     try:
-        result = bend(MAPPING, response)
-    except BendingException:
-        logger.exception("What?!")
+        content = get_api_response(
+            base_url=base_url, session=session, process_group_id=process_group_id,
+        )
+    except NiFiApiError:
+        logger.exception("NiFi API Error")
     else:
-        if result["processGroups"]:  # check if processGroups exist
+        try:
+            result = bend(MAPPING, content)
+        except BendingException:
+            logger.exception("JSON Bending Error")
+        else:
             for process_group in result["processGroups"]:
                 # log details for each process group
                 logger.info(json.dumps(process_group))
                 # try get the details of this process group's children
                 if current_depth < max_depth:
-                    json_content = get_api_response(
-                        session=session, process_group_id=process_group["id"],
-                    )
-                    process_api_response(
-                        response=json_content,
+                    process_nifi_connectors(
+                        base_url=base_url,
                         session=session,
+                        process_group_id=process_group["id"],
                         current_depth=current_depth + 1,
                         max_depth=max_depth,
                     )
@@ -152,18 +185,27 @@ app = typer.Typer()
 
 
 @app.command()
-def nifi(max_depth: int = 0, log_file: str = "/tmp/nifi-monitor.log"):
+def nifi(
+    nifi_base_url: str = "https://nifi-production.ona.io",
+    nifi_username: Optional[str] = None,
+    nifi_password: Optional[str] = typer.Argument(None, envvar="NIFI_USER_PASSWORD"),
+    max_depth: int = 0,
+    log_file: str = "/tmp/nifi-monitor.log",
+):
     """Monitor NiFi process groups."""
     logger.add(
-        sink=log_file, format="{time} {level}", serialize=True, enqueue=True,
+        sink=log_file,
+        format="{time} {level}",
+        serialize=True,
+        enqueue=True,
+        diagnose=False,
     )
     session = Session()
-    session.auth = HTTPBasicAuth("admin", "Defend-Paint-Record-Express-0")
-    # get the JSON response for root-level process groups
-    json_content = get_api_response(session=session)
-    # recursively process the API response
-    return process_api_response(
-        response=json_content, session=session, current_depth=0, max_depth=max_depth,
+    if nifi_username and nifi_password:
+        session.auth = HTTPBasicAuth(nifi_username, nifi_password)
+    # recursively get and process the NiFi connectors
+    return process_nifi_connectors(
+        base_url=nifi_base_url, session=session, current_depth=0, max_depth=max_depth,
     )
 
 
