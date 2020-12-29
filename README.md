@@ -20,7 +20,7 @@ This is done by a command line application that:
 
 1. Reads the NiFi API to get information about process groups.  The response from the API is slightly manipulated to
    expose the required information.
-2. Writes the formatted process groups to a log file.  Each line of the log file contains a JSON document that represents one NiFi process group's information at a particular moment in time. [Here's a sample log file](docs/sample.json).
+2. Writes the formatted process groups to a log file.  Each line of the log file contains a JSON document that represents one NiFi process group's information at a particular moment in time. [Here's a sample log file](docs/sample.log).
 
 ## Installation
 
