@@ -66,11 +66,13 @@ This is done by a command line application that:
 
 - Ensure that you have the requirements listed above installed
 - Clone this repository
-- Use poetry to install all the python dependencies, like so:
+- Use poetry to set up the development environment, like so:
 
     ```sh
     poetry env use 3.8
     poetry install
+    poetry shell
+    pre-commit install
     ```
 
 - ???
