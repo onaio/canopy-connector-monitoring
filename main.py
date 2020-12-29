@@ -14,13 +14,12 @@ VALID_STATUS_CODE = 200
 
 def count_errors(item):
     """Count process group errors."""
+    count = 0
     if item:
-        count = 0
         for x in item:
             if x["level"] == "ERROR":
                 count = count + 1
-        return count
-    return 0
+    return count
 
 
 # define the mapping to transform the API json to what we want
