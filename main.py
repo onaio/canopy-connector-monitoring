@@ -157,7 +157,9 @@ def process_nifi_connectors(
     """
     try:
         content = get_api_response(
-            base_url=base_url, session=session, process_group_id=process_group_id,
+            base_url=base_url,
+            session=session,
+            process_group_id=process_group_id,
         )
     except NiFiApiError:
         logger.exception("NiFi API Error")
@@ -186,11 +188,28 @@ app = typer.Typer()
 
 @app.command()
 def nifi(
-    nifi_base_url: str = "https://nifi-production.ona.io",
-    nifi_username: Optional[str] = None,
-    nifi_password: Optional[str] = typer.Argument(None, envvar="NIFI_USER_PASSWORD"),
-    max_depth: int = 0,
-    log_file: str = "/tmp/nifi-monitor.log",
+    nifi_base_url: str = typer.Option(
+        "https://nifi-production.ona.io", help="The URL of the NiFi instance."
+    ),
+    nifi_username: Optional[str] = typer.Option(
+        None, help="The NiFi basic auth username.  Leave blank if not required."
+    ),
+    nifi_password: Optional[str] = typer.Argument(
+        None,
+        envvar="NIFI_USER_PASSWORD",
+        help="The NiFi basic auth password.  Leave blank if not required.",
+    ),
+    max_depth: int = typer.Option(
+        0,
+        help="This tool will recursively go through all nested NiFi process "
+        "groups until there are no more process groups.  This options is used "
+        "to stop the recursion at a certain desired depth.  Use an arbitrarily"
+        " large value if you wish to go through all process groups.",
+    ),
+    log_file: str = typer.Option(
+        "/tmp/nifi-monitor.log",
+        help="The log file to use.",
+    ),
 ):
     """Monitor NiFi process groups."""
     logger.add(
@@ -205,7 +224,10 @@ def nifi(
         session.auth = HTTPBasicAuth(nifi_username, nifi_password)
     # recursively get and process the NiFi connectors
     return process_nifi_connectors(
-        base_url=nifi_base_url, session=session, current_depth=0, max_depth=max_depth,
+        base_url=nifi_base_url,
+        session=session,
+        current_depth=0,
+        max_depth=max_depth,
     )
 
 
